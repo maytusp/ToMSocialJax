@@ -2,9 +2,12 @@ from socialjax.environments import (
     # Social dilemma environments
     Territory_open,
     Harvest_open,
+    HarvestSingle,
     Clean_up,
+    CleanUpSingle,
     CoopMining,
     CoinGame,
+    CoinGameSingle,
     Mushrooms,
     Gift,
     PD_Arena,
@@ -14,9 +17,12 @@ from socialjax.environments import (
 REGISTERED_ENVS = [
     # Social dilemma environments
     "coin_game",
+    "coin_game_single",
     "harvest_common_open",
+    "harvest_common_single",
     # "harvest_common_closed",
     "clean_up",
+    "clean_up_single",
     "coop_mining",
     "territory_open",
     "pd_arena",
@@ -32,10 +38,14 @@ def make(env_id: str, **env_kwargs):
 
     elif env_id == "harvest_common_open":
         env = Harvest_open(**env_kwargs)
+    elif env_id == "harvest_common_single":
+        env = HarvestSingle(**env_kwargs)
     # elif env_id == "harvest_common_closed":
     #     env = Harvest_closed(**env_kwargs)
     elif env_id == "clean_up":
         env = Clean_up(**env_kwargs)
+    elif env_id == "clean_up_single":
+        env = CleanUpSingle(**env_kwargs)
     elif env_id == "coop_mining":
         env = CoopMining(**env_kwargs)
     elif env_id == "territory_open":
@@ -44,6 +54,8 @@ def make(env_id: str, **env_kwargs):
         env = PD_Arena(**env_kwargs)
     elif env_id == "coin_game":
         env = CoinGame(**env_kwargs)
+    elif env_id == "coin_game_single":
+        env = CoinGameSingle(**env_kwargs)
     elif env_id == "mushrooms":
         env = Mushrooms(**env_kwargs)
     elif env_id == "gift":
