@@ -6,8 +6,16 @@
 #SBATCH -c 12
 
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+if [[ -n "${SLURM_SUBMIT_DIR:-}" && -d "${SLURM_SUBMIT_DIR}/algorithms/IPPO" ]]; then
+  PROJECT_DIR="$(cd "${SLURM_SUBMIT_DIR}" && pwd)"
+  SCRIPT_DIR="${PROJECT_DIR}/scripts"
+elif [[ -n "${SLURM_SUBMIT_DIR:-}" && -d "${SLURM_SUBMIT_DIR}/../algorithms/IPPO" ]]; then
+  SCRIPT_DIR="$(cd "${SLURM_SUBMIT_DIR}" && pwd)"
+  PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+else
+  SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+fi
 IPPO_DIR="${PROJECT_DIR}/algorithms/IPPO"
 
 echo "Project directory: ${PROJECT_DIR}"
