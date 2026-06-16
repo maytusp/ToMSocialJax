@@ -71,7 +71,8 @@ def experiment_name(config, run_name="ippo_lm"):
     if configured_name:
         return configured_name
     transform_suffix = "cpt" if config.get("PERSPECTIVE_TRANSFORM", True) else "sameinp"
-    return f"{run_name}_{transform_suffix}_{config['ENV_NAME']}"
+    self_pred_suffix = "selfpred" if config.get("USE_SELF_PRED", True) else "nopred"
+    return f"{run_name}_{transform_suffix}_{self_pred_suffix}_{config['ENV_NAME']}"
 
 
 class TwoStreamActorCriticRNN(nn.Module):
@@ -125,6 +126,26 @@ class TwoStreamActorCriticRNN(nn.Module):
 
         rnn_input = jnp.concatenate([self_embedding, other_embedding], axis=-1)
         hidden, embedding = ScannedRNN(name="fusion_rnn")(hidden, (rnn_input, dones))
+        z = embedding
+
+        aux = {"rnn_hidden": z}
+        if self.config.get("USE_SELF_PRED", True):
+            pred_z = nn.Dense(
+                self.config["FC_DIM_SIZE"],
+                kernel_init=orthogonal(jnp.sqrt(2)),
+                bias_init=constant(0.0),
+                name="self_pred_fc",
+            )(z)
+            pred_z = activation(pred_z)
+            pred_gammas = tuple(self.config.get("SELF_PRED_GAMMAS", (0.0, 0.5, 0.9)))
+            pred_z = nn.Dense(
+                len(pred_gammas) * z.shape[-1],
+                kernel_init=orthogonal(1.0),
+                bias_init=constant(0.0),
+                name="self_pred_out",
+            )(pred_z)
+            pred_z = pred_z.reshape(*z.shape[:-1], len(pred_gammas), z.shape[-1])
+            aux["pred_hidden_repr"] = pred_z
 
         actor_mean = nn.Dense(
             self.config["FC_DIM_SIZE"],
@@ -154,7 +175,7 @@ class TwoStreamActorCriticRNN(nn.Module):
             bias_init=constant(0.0),
             name="critic_out",
         )(critic)
-        return hidden, pi, jnp.squeeze(critic, axis=-1)
+        return hidden, pi, jnp.squeeze(critic, axis=-1), aux
 
 
 def _params_subtree(variables):
@@ -209,6 +230,8 @@ def build_trainable_labels(params, config):
         ("params", "critic_fc"),
         ("params", "critic_out"),
     }
+    if config.get("USE_SELF_PRED", True):
+        trainable_paths.update({("params", "self_pred_fc"), ("params", "self_pred_out")})
 
     if config.get("FINETUNE_SELF_STREAM", True):
         trainable_paths.update({("params", "self_cnn"), ("params", "self_ln")})
@@ -309,7 +332,7 @@ def make_train(config, pretrained_params):
                 rng, _rng = jax.random.split(rng)
                 obs_batch = batchify_obs(last_obs)
                 ac_in = (obs_batch[None, :], last_done[None, :])
-                hstate, pi, value = network.apply(train_state.params, hstate, ac_in)
+                hstate, pi, value, _ = network.apply(train_state.params, hstate, ac_in)
                 action = pi.sample(seed=_rng).squeeze(axis=0)
                 log_prob = pi.log_prob(action).squeeze(axis=0)
                 value = value.squeeze(axis=0)
@@ -358,7 +381,7 @@ def make_train(config, pretrained_params):
             )
             last_obs_batch = batchify_obs(last_obs)
             ac_in = (last_obs_batch[None, :], last_done[None, :])
-            _, _, last_val = network.apply(train_state.params, hstate, ac_in)
+            _, _, last_val, _ = network.apply(train_state.params, hstate, ac_in)
             last_val = last_val.squeeze(axis=0)
 
             def _calculate_gae(traj_batch, last_val):
@@ -394,7 +417,7 @@ def make_train(config, pretrained_params):
                     init_hstate, traj_batch, advantages, targets = batch_info
 
                     def _loss_fn(params, init_hstate, traj_batch, gae, targets):
-                        _, pi, value = network.apply(
+                        _, pi, value, aux = network.apply(
                             params,
                             init_hstate.squeeze(axis=0),
                             (traj_batch.obs, traj_batch.done),
@@ -426,16 +449,58 @@ def make_train(config, pretrained_params):
                         )
                         loss_actor = -jnp.minimum(loss_actor1, loss_actor2).mean()
                         entropy = pi.entropy().mean()
+
+                        pred_loss = jnp.asarray(0.0, dtype=value.dtype)
+                        if config.get("USE_SELF_PRED", True):
+                            hidden = aux["rnn_hidden"]
+                            pred_hidden_repr = aux["pred_hidden_repr"]
+                            next_hidden = jnp.concatenate(
+                                [hidden[1:], jnp.zeros_like(hidden[-1:])], axis=0
+                            )
+                            next_pred_hidden_repr = jnp.concatenate(
+                                [
+                                    pred_hidden_repr[1:],
+                                    jnp.zeros_like(pred_hidden_repr[-1:]),
+                                ],
+                                axis=0,
+                            )
+                            not_done = 1.0 - traj_batch.done.astype(jnp.float32)
+                            has_next_step = jnp.ones_like(not_done).at[-1].set(0.0)
+                            future_mask = (not_done * has_next_step)[..., None, None]
+                            pred_gammas = jnp.asarray(
+                                config.get("SELF_PRED_GAMMAS", (0.0, 0.5, 0.9)),
+                                dtype=hidden.dtype,
+                            ).reshape((1, 1, -1, 1))
+                            pred_target = jax.lax.stop_gradient(
+                                future_mask
+                                * (
+                                    next_hidden[..., None, :]
+                                    + pred_gammas * next_pred_hidden_repr
+                                )
+                            )
+                            pred_error_clip = config.get("SELF_PRED_ERROR_CLIP", 10.0)
+                            pred_error = jnp.clip(
+                                pred_hidden_repr - pred_target,
+                                -pred_error_clip,
+                                pred_error_clip,
+                            )
+                            pred_delta = config.get("SELF_PRED_HUBER_DELTA", 1.0)
+                            pred_loss = optax.huber_loss(
+                                pred_error, jnp.zeros_like(pred_error), delta=pred_delta
+                            ).mean()
+
                         total_loss = (
                             loss_actor
                             + config["VF_COEF"] * value_loss
                             - config["ENT_COEF"] * entropy
+                            + config.get("SELF_PRED_COEF", 0.1) * pred_loss
                         )
                         metrics = {
                             "loss_total": total_loss,
                             "value_loss": value_loss,
                             "actor_loss": loss_actor,
                             "entropy": entropy,
+                            "self_pred_loss": pred_loss,
                             "approx_kl": approx_kl,
                             "clip_frac": clip_frac,
                         }
@@ -553,7 +618,7 @@ def evaluate(params, env, config):
     for _ in range(config["GIF_NUM_FRAMES"]):
         obs_batch = obs.reshape((-1,) + env.observation_space()[0].shape)
         ac_in = (obs_batch[None, :], done_batch[None, :])
-        hstate, pi, _ = network.apply(params, hstate, ac_in)
+        hstate, pi, _, _ = network.apply(params, hstate, ac_in)
         rng, _rng = jax.random.split(rng)
         actions = pi.sample(seed=_rng).squeeze(axis=0)
         env_act = [int(a) for a in np.array(actions)]
