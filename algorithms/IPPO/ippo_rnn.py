@@ -28,6 +28,10 @@ from PIL import Image
 from socialjax.wrappers.baselines import LogWrapper
 
 
+def repo_path(*parts):
+    return REPO_ROOT.joinpath(*parts)
+
+
 class ScannedRNN(nn.Module):
     @functools.partial(
         nn.scan,
@@ -524,7 +528,7 @@ def evaluate(params, env, config, run_name="ippo_rnn"):
         done_batch = jnp.array([_agent_value(done, a) for a in env.agents])
         pics.append(env.render(state))
 
-    root_dir = Path("evaluation") / config["ENV_NAME"]
+    root_dir = repo_path("evaluation", config["ENV_NAME"])
     root_dir.mkdir(parents=True, exist_ok=True)
     pics = [Image.fromarray(np.array(img)) for img in pics]
     gif_path = root_dir / (
@@ -552,6 +556,7 @@ def single_run(config, run_name="ippo_rnn"):
         tags=["IPPO", "RNN", config["ENV_NAME"]],
         config=config,
         mode=config["WANDB_MODE"],
+        dir=str(REPO_ROOT),
         name=f"{run_name}_{config['ENV_NAME']}",
     )
 
@@ -562,7 +567,7 @@ def single_run(config, run_name="ippo_rnn"):
 
     filename = f"{config['ENV_NAME']}_{run_name}_seed{config['SEED']}"
     train_state = jax.tree_util.tree_map(lambda x: x[0], out["runner_state"][0])
-    save_path = f"./checkpoints/individual/{filename}.pkl"
+    save_path = repo_path("checkpoints", "individual", f"{filename}.pkl")
     save_params(train_state, save_path)
     params = load_params(save_path)
     evaluate(
@@ -590,7 +595,7 @@ def tune(default_config, run_name="ippo_rnn"):
     }
 
     def wrapped_make_train():
-        wandb.init(project=default_config["PROJECT"])
+        wandb.init(project=default_config["PROJECT"], dir=str(REPO_ROOT))
         config = copy.deepcopy(default_config)
         for k, v in dict(wandb.config).items():
             if "." in k:

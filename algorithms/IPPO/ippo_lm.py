@@ -54,6 +54,10 @@ except ImportError:
 from socialjax.wrappers.baselines import LogWrapper
 
 
+def repo_path(*parts):
+    return REPO_ROOT.joinpath(*parts)
+
+
 def _strip_single_suffix(task: str) -> str:
     return task[:-7] if task.endswith("_single") else task
 
@@ -573,6 +577,7 @@ def single_run(config, run_name="ippo_lm"):
         tags=["IPPO", "RNN", "LM", config["ENV_NAME"]],
         config=config,
         mode=config["WANDB_MODE"],
+        dir=str(REPO_ROOT),
         name=exp_name,
     )
 
@@ -583,7 +588,7 @@ def single_run(config, run_name="ippo_lm"):
 
     filename = f"{config['ENV_NAME']}_{exp_name}_seed{config['SEED']}"
     train_state = jax.tree_util.tree_map(lambda x: x[0], out["runner_state"][0])
-    save_path = f"./checkpoints/individual/{filename}.pkl"
+    save_path = repo_path("checkpoints", "individual", f"{filename}.pkl")
     save_params(train_state, save_path)
 
 
@@ -609,7 +614,7 @@ def tune(default_config, run_name="ippo_lm"):
     }
 
     def wrapped_make_train():
-        wandb.init(project=default_config["PROJECT"])
+        wandb.init(project=default_config["PROJECT"], dir=str(REPO_ROOT))
         config = copy.deepcopy(default_config)
         for k, v in dict(wandb.config).items():
             if "." in k:

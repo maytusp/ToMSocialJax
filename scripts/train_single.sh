@@ -16,8 +16,9 @@ echo "IPPO directory: ${IPPO_DIR}"
 source activate jax
 
 export PYTHONPATH="${PROJECT_DIR}:${PYTHONPATH:-}"
+export WANDB_DIR="${PROJECT_DIR}"
 
-cd "${IPPO_DIR}"
+cd "${PROJECT_DIR}"
 
 COMMON_OVERRIDES=(
   "TUNE=False"
@@ -53,4 +54,4 @@ fi
 # python ippo_rnn_harvest_single.py "${COMMON_OVERRIDES[@]}"
 
 echo "Training Coin Game Single with recurrent IPPO"
-python ippo_rnn_coin_game_single.py "${COMMON_OVERRIDES[@]}"
+python "${IPPO_DIR}/ippo_rnn_coin_game_single.py" "${COMMON_OVERRIDES[@]}"

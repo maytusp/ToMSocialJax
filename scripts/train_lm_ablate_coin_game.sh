@@ -16,11 +16,12 @@ echo "IPPO directory: ${IPPO_DIR}"
 source activate jax
 
 export PYTHONPATH="${PROJECT_DIR}:${PYTHONPATH:-}"
+export WANDB_DIR="${PROJECT_DIR}"
 
-cd "${IPPO_DIR}"
+cd "${PROJECT_DIR}"
 
 SEED_VALUE="${SEED:-30}"
-DEFAULT_PRETRAINED_PATH="${IPPO_DIR}/checkpoints/individual/coin_game_single_rnn_seed${SEED_VALUE}.pkl"
+DEFAULT_PRETRAINED_PATH="${PROJECT_DIR}/checkpoints/individual/coin_game_single_rnn_seed${SEED_VALUE}.pkl"
 PRETRAINED_PATH="${PRETRAINED_PARAMS_PATH:-${DEFAULT_PRETRAINED_PATH}}"
 
 COMMON_OVERRIDES=(
@@ -65,4 +66,4 @@ fi
 
 echo "Training Coin Game LM with recurrent IPPO"
 echo "Pretrained single-agent params: ${PRETRAINED_PATH}"
-python ippo_lm.py "${COMMON_OVERRIDES[@]}"
+python "${IPPO_DIR}/ippo_lm.py" "${COMMON_OVERRIDES[@]}"
