@@ -36,15 +36,15 @@ COMMON_OVERRIDES=(
   "ENV_NAME=coop_mining"
   "ENV_KWARGS.num_agents=2"
   "ENV_KWARGS.shared_rewards=False"
-  "ENV_KWARGS.num_outer_steps=1"
-  "ENV_KWARGS.max_miners=${MAX_MINERS:-4}"
-  "ENV_KWARGS.min_gold_miners=${MIN_GOLD_MINERS:-2}"
-  "ENV_KWARGS.mining_range=${MINING_RANGE:-3}"
-  "ENV_KWARGS.reward_iron=${REWARD_IRON:-1.0}"
-  "ENV_KWARGS.reward_gold=${REWARD_GOLD:-8.0}"
-  "ENV_KWARGS.gold_mining_window=${GOLD_MINING_WINDOW:-3}"
-  "ENV_KWARGS.regrowth_prob_iron=${REGROWTH_PROB_IRON:-0.0004}"
-  "ENV_KWARGS.regrowth_prob_gold=${REGROWTH_PROB_GOLD:-0.00016}"
+  "+ENV_KWARGS.num_outer_steps=1"
+  "+ENV_KWARGS.max_miners=${MAX_MINERS:-4}"
+  "+ENV_KWARGS.min_gold_miners=${MIN_GOLD_MINERS:-2}"
+  "+ENV_KWARGS.mining_range=${MINING_RANGE:-3}"
+  "+ENV_KWARGS.reward_iron=${REWARD_IRON:-1.0}"
+  "+ENV_KWARGS.reward_gold=${REWARD_GOLD:-8.0}"
+  "+ENV_KWARGS.gold_mining_window=${GOLD_MINING_WINDOW:-3}"
+  "+ENV_KWARGS.regrowth_prob_iron=${REGROWTH_PROB_IRON:-0.0004}"
+  "+ENV_KWARGS.regrowth_prob_gold=${REGROWTH_PROB_GOLD:-0.00016}"
   "ENV_KWARGS.cnn=True"
   "ENV_KWARGS.jit=True"
   "ENV_KWARGS.svo=True"
@@ -76,10 +76,6 @@ fi
 
 if [[ -n "${LR:-}" ]]; then
   COMMON_OVERRIDES+=("LR=${LR}")
-fi
-
-if [[ -n "${RUN_NAME:-}" ]]; then
-  COMMON_OVERRIDES+=("RUN_NAME=${RUN_NAME}")
 fi
 
 echo "Training Coop Mining SVO RNN with ToM partner hidden input"
