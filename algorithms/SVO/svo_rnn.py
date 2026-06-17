@@ -1,6 +1,7 @@
 """SVO recurrent PPO with optional partner hidden-state input."""
 
 import copy
+import functools
 import sys
 from pathlib import Path
 from typing import Dict, Sequence
@@ -51,27 +52,6 @@ class ActorCriticSVORNN(nn.Module):
     action_dim: Sequence[int]
     config: Dict
 
-    def _add_partner_hidden(self, embedding):
-        if not self.config.get("TOM_AUX_HIDDEN", False):
-            return embedding
-
-        num_agents = int(self.config.get("NUM_AGENTS", 2))
-        if num_agents != 2:
-            raise ValueError("TOM_AUX_HIDDEN currently supports exactly two agents.")
-        if embedding.shape[1] % num_agents != 0:
-            raise ValueError(
-                f"Actor batch {embedding.shape[1]} is not divisible by num_agents={num_agents}."
-            )
-
-        num_envs = embedding.shape[1] // num_agents
-        paired = embedding.reshape(
-            embedding.shape[0], num_agents, num_envs, embedding.shape[-1]
-        )
-        partner = jnp.flip(paired, axis=1).reshape(embedding.shape)
-        if self.config.get("TOM_STOP_GRAD_PARTNER", True):
-            partner = jax.lax.stop_gradient(partner)
-        return jnp.concatenate([embedding, partner], axis=-1)
-
     @nn.compact
     def __call__(self, hidden, x):
         obs, dones = x
@@ -89,15 +69,21 @@ class ActorCriticSVORNN(nn.Module):
         embedding = embedding.reshape(*obs.shape[:-3], -1)
         embedding = nn.LayerNorm(name="ln")(embedding)
 
-        hidden, embedding = ScannedRNN(name="rnn")(hidden, (embedding, dones))
-        head_input = self._add_partner_hidden(embedding)
+        if self.config.get("TOM_AUX_HIDDEN", False):
+            hidden, embedding = PartnerHiddenScannedRNN(
+                num_agents=int(self.config.get("NUM_AGENTS", 2)),
+                stop_grad_partner=self.config.get("TOM_STOP_GRAD_PARTNER", True),
+                name="rnn",
+            )(hidden, (embedding, dones))
+        else:
+            hidden, embedding = ScannedRNN(name="rnn")(hidden, (embedding, dones))
 
         actor_mean = nn.Dense(
             self.config["FC_DIM_SIZE"],
             kernel_init=orthogonal(2),
             bias_init=constant(0.0),
             name="actor_fc",
-        )(head_input)
+        )(embedding)
         actor_mean = activation(actor_mean)
         actor_mean = nn.Dense(
             self.action_dim,
@@ -112,7 +98,7 @@ class ActorCriticSVORNN(nn.Module):
             kernel_init=orthogonal(2),
             bias_init=constant(0.0),
             name="critic_fc",
-        )(head_input)
+        )(embedding)
         critic = activation(critic)
         critic = nn.Dense(
             1,
@@ -121,6 +107,46 @@ class ActorCriticSVORNN(nn.Module):
             name="critic_out",
         )(critic)
         return hidden, pi, jnp.squeeze(critic, axis=-1)
+
+
+class PartnerHiddenScannedRNN(nn.Module):
+    num_agents: int = 2
+    stop_grad_partner: bool = True
+
+    @functools.partial(
+        nn.scan,
+        variable_broadcast="params",
+        in_axes=0,
+        out_axes=0,
+        split_rngs={"params": False},
+    )
+    @nn.compact
+    def __call__(self, carry, x):
+        rnn_state = carry
+        ins, resets = x
+
+        if self.num_agents != 2:
+            raise ValueError("PartnerHiddenScannedRNN currently supports exactly two agents.")
+        if ins.shape[0] % self.num_agents != 0:
+            raise ValueError(
+                f"Actor batch {ins.shape[0]} is not divisible by num_agents={self.num_agents}."
+            )
+
+        hidden_size = rnn_state.shape[-1]
+        new_carry = ScannedRNN.initialize_carry(ins.shape[0], hidden_size)
+        rnn_state = jnp.where(resets[:, None], new_carry, rnn_state)
+
+        num_envs = ins.shape[0] // self.num_agents
+        partner_state = rnn_state.reshape(
+            self.num_agents, num_envs, hidden_size
+        )
+        partner_state = jnp.flip(partner_state, axis=0).reshape(rnn_state.shape)
+        if self.stop_grad_partner:
+            partner_state = jax.lax.stop_gradient(partner_state)
+
+        rnn_input = jnp.concatenate([ins, partner_state], axis=-1)
+        new_rnn_state, y = nn.GRUCell(features=hidden_size)(rnn_state, rnn_input)
+        return new_rnn_state, y
 
 
 def _env_pair_minibatches(batch, permutation, num_agents, num_envs, num_minibatches):
