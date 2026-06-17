@@ -55,11 +55,11 @@ if [[ -n "${NUM_MINIBATCHES:-}" ]]; then
   COMMON_OVERRIDES+=("NUM_MINIBATCHES=${NUM_MINIBATCHES}")
 fi
 
-# echo "Training Cleanup Single with recurrent IPPO"
-# python ippo_rnn_cleanup_single.py "${COMMON_OVERRIDES[@]}"
+echo "Training Cleanup Single with recurrent IPPO"
+python "${IPPO_DIR}/ippo_rnn_cleanup_single.py" "${COMMON_OVERRIDES[@]}"
 
 # echo "Training Harvest Single with recurrent IPPO"
-# python ippo_rnn_harvest_single.py "${COMMON_OVERRIDES[@]}"
+# python "${IPPO_DIR}/ippo_rnn_harvest_single.py" "${COMMON_OVERRIDES[@]}"
 
-echo "Training Coin Game Single with recurrent IPPO"
-python "${IPPO_DIR}/ippo_rnn_coin_game_single.py" "${COMMON_OVERRIDES[@]}"
+# echo "Training Coin Game Single with recurrent IPPO"
+# python "${IPPO_DIR}/ippo_rnn_coin_game_single.py" "${COMMON_OVERRIDES[@]}"

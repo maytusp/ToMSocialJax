@@ -1,0 +1,63 @@
+"LR": 0.0005
+"NUM_ENVS": 256
+"NUM_STEPS": 1000
+"TOTAL_TIMESTEPS": 1e9
+"UPDATE_EPOCHS": 2
+"NUM_MINIBATCHES": 256
+"GAMMA": 0.99
+"GAE_LAMBDA": 0.95
+"CLIP_EPS": 0.2
+"ENT_COEF": 0.01
+"VF_COEF": 0.5
+"USE_SELF_PRED": True
+"SELF_PRED_COEF": 0.1
+"SELF_PRED_GAMMAS": [0.0, 0.5, 0.9]
+"SELF_PRED_ERROR_CLIP": 10.0
+"SELF_PRED_HUBER_DELTA": 1.0
+"MAX_GRAD_NORM": 0.5
+"ACTIVATION": "relu"
+"GRU_HIDDEN_DIM": 64
+"FC_DIM_SIZE": 64
+"ENV_NAME": "coin_game"
+"ENV_KWARGS":
+  "num_agents": 2
+  "num_inner_steps": 1000
+  "shared_rewards": False
+  "cnn": True
+  "jit": True
+  "svo": True
+  "svo_target_agents": [0, 1]
+  "svo_w": 0.5
+  "svo_ideal_angle_degrees": 90
+
+"PRETRAINED_PARAMS_PATH": ""
+"RUN_NAME": null
+"TRANSFORM_TASK": null
+"PERSPECTIVE_TRANSFORM": True
+"FINETUNE_SELF_STREAM": True
+"FINETUNE_OTHER_STREAM": False
+"TRANSFORM_SELF_CHANNEL": null
+"TRANSFORM_OTHER_CHANNEL": null
+"TRANSFORM_ANGLE_START": null
+"TRANSFORM_ANGLE_COUNT": null
+
+"USE_SVO_LOG_WRAPPER": True
+"ALGO_TAG": "SVO"
+
+"ANNEAL_LR": True
+"SEED": 30
+"NUM_SEEDS": 1
+"TUNE": False
+
+"REWARD": "individual"
+"GIF_NUM_FRAMES": 250
+"PARAMETER_SHARING": True
+
+"ENTITY": ""
+"PROJECT": "svo_socialjax"
+"WANDB_MODE": "online"
+"WANDB_TAGS":
+  - INDIVIDUAL_REWARD
+  - RNN
+  - LM
+  - SVO
