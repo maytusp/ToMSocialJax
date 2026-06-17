@@ -514,6 +514,8 @@ def single_run(config, run_name="svo_rnn"):
     train_state = jax.tree_util.tree_map(lambda x: x[0], out["runner_state"][0])
     save_path = repo_path("checkpoints", "svo", f"{filename}.pkl")
     save_params(train_state, save_path)
+    if not config.get("EVALUATE", True):
+        return
     params = load_params(save_path)
     evaluate(
         params,
